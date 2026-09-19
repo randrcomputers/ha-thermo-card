@@ -6,6 +6,8 @@
 
 Lovelace **round thermostat** for a `climate` entity. Classic Honeywell-style dial (or a modern / digital look), **− / +** setpoint, heat and cool runtime today, fan mode, and an optional daily **high–low stem** chart.
 
+Add extra thermostats and **tap the title** to switch which one the card controls (Home, Garage, and so on).
+
 Works with any Home Assistant thermostat. History comes from the recorder (climate history or an optional indoor temperature sensor).
 
 ![Thermo Plus Card](media/preview.png)
@@ -65,10 +67,15 @@ type: custom:thermo-plus-card
 name: HOME
 look: classic
 entity: climate.home_2
+entities:
+  - climate.home_2
+  - climate.garage
 outdoor_entity: sensor.outside_temp_and_humidity_temperature
 ```
 
 Mode buttons call `climate.set_hvac_mode`. Fan buttons call `climate.set_fan_mode`. The **− / +** controls on Target, or **click / drag the dial** (classic and modern looks), call `climate.set_temperature`.
+
+Add extra climate entities under **Other thermostats**. Tap the title (HOME, Garage, …) to switch which thermostat this card controls.
 
 Set **Card size** to **50%** in the editor, or `size: 50` in YAML, to shrink the whole card.
 
@@ -76,6 +83,7 @@ Set **Card size** to **50%** in the editor, or `size: 50` in YAML, to shrink the
 
 | Area | Source |
 | --- | --- |
+| Title | Selected thermostat name. Tap it to switch if `entities` has more than one |
 | Center number / indoor scale | `current_temperature` |
 | Red setpoint triangle (top scale) | Setpoint (`temperature`, or low/high in heat_cool) |
 | Idle / Target | Furnace action plus room temp, and the setpoint (− / +) |
@@ -95,10 +103,11 @@ All of these are in the visual editor. YAML names match the editor labels below.
 | `look` | Thermostat look | no | `classic` | `classic`, `modern`, or `digital` |
 | `show_dial` | Show dial graphic | no | `true` | Hide the dial; text and buttons fill and center |
 | `size` | Card size | no | `100` | Overall card scale: `100`, `75`, or `50` |
-| `entity` | Climate / thermostat | **yes** | — | `climate` entity |
+| `entity` | Climate / thermostat | **yes** | — | Default `climate` entity |
+| `entities` | Other thermostats | no | — | Extra climate entities; tap the title to switch |
 | `outdoor_entity` | Outdoor temperature | no | — | Temperature sensor shown as Outdoor |
 | `temp_entity` | Indoor history sensor | no | — | Optional `temperature` sensor for daily min/max if the climate entity has no statistics |
-| `name` | Card title | no | `Thermostat` | Header text |
+| `name` | Card title | no | entity name | Header text when there is only one thermostat; with several, the title follows the selected entity |
 | `unit_system` | Display units | no | `auto` | `auto`, `imperial` (°F), `metric` (°C) |
 | `min_scale` | Scale low | no | entity min | Dial scale low, in the thermostat’s native units |
 | `max_scale` | Scale high | no | entity max | Dial scale high |
@@ -116,6 +125,9 @@ name: HOME
 look: classic
 size: 100
 entity: climate.home_2
+entities:
+  - climate.home_2
+  - climate.garage
 outdoor_entity: sensor.outside_temp_and_humidity_temperature
 unit_system: imperial
 history_days: 14
