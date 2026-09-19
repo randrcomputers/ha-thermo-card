@@ -19,6 +19,11 @@ Pick a style in the visual editor (**Thermostat look**) or with `look:` in YAML.
 | ![Classic round](media/look-classic.png) | ![Modern dial](media/look-modern.png) | ![Digital face](media/look-digital.png) |
 | `classic` | `modern` | `digital` |
 
+| No dial |
+| :---: |
+| ![No dial](media/look-nodial.png) |
+| `show_dial: false` |
+
 | `look` | Editor label | Notes |
 | --- | --- | --- |
 | `classic` | Classic round | Cream analog dial — the familiar wall thermostat (default) |
