@@ -59,6 +59,19 @@
     return id === "50" || id === "75" || id === "100" ? id : "100";
   }
 
+  function climateIds(config) {
+    const ids = [];
+    const add = (id) => {
+      const s = String(id || "").trim();
+      if (s.startsWith("climate.") && !ids.includes(s)) ids.push(s);
+    };
+    add(config?.entity);
+    const extra = config?.entities;
+    if (Array.isArray(extra)) extra.forEach(add);
+    else if (typeof extra === "string" && extra.trim()) extra.split(/[\s,]+/).forEach(add);
+    return ids;
+  }
+
   function mergeConfig(config) {
     const merged = { ...DEFAULTS, ...(config || {}) };
     merged.size = sizeOf(merged);
@@ -343,6 +356,8 @@
         _busy: { state: true },
         _dragTemps: { state: true },
         _editSetpoint: { state: true },
+        _selectedEntity: { state: true },
+        _pickerOpen: { state: true },
       };
     }
 
@@ -396,6 +411,8 @@
       this._dragging = false;
       this._editSetpoint = false;
       this._editTimer = 0;
+      this._selectedEntity = "";
+      this._pickerOpen = false;
     }
 
     getCardSize() {
@@ -435,12 +452,54 @@
       );
     }
 
+    _activeEntity() {
+      const ids = climateIds(this.config);
+      if (this._selectedEntity && ids.includes(this._selectedEntity)) return this._selectedEntity;
+      return ids[0] || this.config?.entity || "";
+    }
+
+    _cfg() {
+      const cfg = mergeConfig(this.config || {});
+      cfg.entity = this._activeEntity();
+      return cfg;
+    }
+
+    _climateChoices() {
+      return climateIds(this.config).map((id) => {
+        const st = this.hass?.states?.[id];
+        return {
+          id,
+          name: st?.attributes?.friendly_name || id.replace(/^climate\./, "").replace(/_/g, " "),
+          on: id === this._activeEntity(),
+        };
+      });
+    }
+
+    _onTitleClick() {
+      if (climateIds(this.config).length > 1) {
+        this._pickerOpen = !this._pickerOpen;
+        return;
+      }
+      this._moreInfo(this._activeEntity());
+    }
+
+    _setClimate(id) {
+      if (!id) return;
+      this._pickerOpen = false;
+      if (id === this._activeEntity()) return;
+      this._selectedEntity = id;
+      this._dragTemps = null;
+      this._editSetpoint = false;
+      this._histKey = "";
+      this._loadHistory();
+    }
+
     _histEntity(cfg) {
       return cfg.temp_entity || cfg.entity;
     }
 
     async _loadHistory() {
-      const cfg = mergeConfig(this.config || {});
+      const cfg = this._cfg();
       const entity = this._histEntity(cfg);
       const hass = this.hass;
       if (!entity || !hass?.callWS) return;
@@ -516,7 +575,7 @@
     }
 
     _model() {
-      const cfg = mergeConfig(this.config || {});
+      const cfg = this._cfg();
       const st = entityState(this.hass, cfg.entity);
       const outSt = entityState(this.hass, cfg.outdoor_entity);
       const native = nativeUnit(this.hass, st);
@@ -572,7 +631,11 @@
         unavailable,
         lookId: lookIdOf(cfg),
         size: sizeOf(cfg),
-        title: cfg.name || attrs.friendly_name || "Thermostat",
+        title:
+          climateIds(this.config).length > 1
+            ? attrs.friendly_name || cfg.name || "Thermostat"
+            : cfg.name || attrs.friendly_name || "Thermostat",
+        canSwitch: climateIds(this.config).length > 1,
         badge: actionBadge(action, mode, current, dual ? (low + high) / 2 : target),
         furnace: furnaceState(action, mode),
       };
@@ -716,11 +779,12 @@
     }
 
     async _setMode(mode) {
-      if (!this.config?.entity || this._busy) return;
+      const entity = this._activeEntity();
+      if (!entity || this._busy) return;
       this._busy = true;
       try {
         await this.hass.callService("climate", "set_hvac_mode", {
-          entity_id: this.config.entity,
+          entity_id: entity,
           hvac_mode: mode,
         });
       } finally {
@@ -729,11 +793,12 @@
     }
 
     async _setFan(mode) {
-      if (!this.config?.entity || this._busy) return;
+      const entity = this._activeEntity();
+      if (!entity || this._busy) return;
       this._busy = true;
       try {
         await this.hass.callService("climate", "set_fan_mode", {
-          entity_id: this.config.entity,
+          entity_id: entity,
           fan_mode: mode,
         });
       } finally {
@@ -754,7 +819,7 @@
 
     _syncDragToHass() {
       if (this._dragging || !this._dragTemps) return;
-      const st = this.hass?.states?.[this.config?.entity];
+      const st = this.hass?.states?.[this._activeEntity()];
       const attrs = st?.attributes || {};
       const drag = this._dragTemps;
       if (drag.target != null) {
@@ -921,9 +986,36 @@
         <ha-card>
           <div class="wrap ${showHist ? "" : "compact"} ${showDial ? "" : "nodial"}">
             <div class="header">
-              <button class="title" @click=${() => this._moreInfo(m.cfg.entity)}>
-                ${m.title}
-              </button>
+              <div class="title-wrap">
+                <button
+                  class="title ${m.canSwitch ? "switch" : ""}"
+                  @click=${() => this._onTitleClick()}
+                >
+                  ${m.title}
+                  ${m.canSwitch
+                    ? html`<ha-icon class="chev ${this._pickerOpen ? "open" : ""}" icon="mdi:chevron-down"></ha-icon>`
+                    : ""}
+                </button>
+                ${this._pickerOpen
+                  ? html`
+                      <div class="picker-back" @click=${() => (this._pickerOpen = false)}></div>
+                      <div class="picker" role="listbox" aria-label="Choose thermostat">
+                        ${this._climateChoices().map(
+                          (c) => html`
+                            <button
+                              class="${c.on ? "on" : ""}"
+                              role="option"
+                              aria-selected=${c.on}
+                              @click=${() => this._setClimate(c.id)}
+                            >
+                              ${c.name}
+                            </button>
+                          `
+                        )}
+                      </div>
+                    `
+                  : ""}
+              </div>
               ${m.unavailable
                 ? html`<span class="badge warn">Unavailable</span>`
                 : this._statusChip(m)}
@@ -1358,6 +1450,10 @@
           margin-left: auto;
           margin-bottom: 0;
         }
+        .title-wrap {
+          position: relative;
+          z-index: 3;
+        }
         .title {
           border: 0;
           background: none;
@@ -1367,6 +1463,57 @@
           color: var(--primary-text-color);
           cursor: pointer;
           text-align: left;
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+        }
+        .title.switch {
+          text-transform: none;
+        }
+        .title .chev {
+          --mdc-icon-size: 20px;
+          width: 20px;
+          height: 20px;
+          opacity: 0.7;
+        }
+        .title .chev.open {
+          transform: rotate(180deg);
+        }
+        .picker-back {
+          position: fixed;
+          inset: 0;
+          z-index: 4;
+        }
+        .picker {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          z-index: 5;
+          min-width: 188px;
+          padding: 6px;
+          border-radius: 12px;
+          border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+          background: var(--card-background-color, #1c1c1c);
+          box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+        }
+        .picker button {
+          display: block;
+          width: 100%;
+          border: 0;
+          background: none;
+          color: var(--primary-text-color);
+          text-align: left;
+          font-size: 0.92rem;
+          font-weight: 600;
+          padding: 8px 10px;
+          border-radius: 8px;
+          cursor: pointer;
+        }
+        .picker button.on {
+          background: var(--secondary-background-color, rgba(255, 255, 255, 0.08));
+        }
+        .picker button:hover {
+          background: var(--secondary-background-color, rgba(255, 255, 255, 0.1));
         }
         .badge {
           font-size: 0.72rem;
@@ -1965,6 +2112,10 @@
               selector: { entity: { domain: "climate" } },
             },
             {
+              name: "entities",
+              selector: { entity: { domain: "climate", multiple: true } },
+            },
+            {
               name: "outdoor_entity",
               selector: {
                 entity: { domain: "sensor", device_class: "temperature" },
@@ -2026,6 +2177,7 @@
               look: "Thermostat look",
               size: "Card size",
               entity: "Climate / thermostat",
+              entities: "Other thermostats (tap title to switch)",
               outdoor_entity: "Outdoor temperature (optional)",
               humidity_entity: "Humidity sensor (optional)",
               temp_entity: "Indoor history sensor (optional)",

@@ -1,0 +1,21 @@
+# Thermo Plus — example Lovelace card
+#
+# look: classic | modern | digital
+# size: 100 | 75 | 50
+# show_dial: true | false
+
+type: custom:thermo-plus-card
+name: HOME
+look: classic
+size: 100
+entity: climate.home_2
+entities:
+  - climate.home_2
+  - climate.garage
+outdoor_entity: sensor.outside_temp_and_humidity_temperature
+unit_system: imperial
+history_days: 14
+show_history: false
+show_dial: true
+show_outdoor: true
+show_humidity: true
